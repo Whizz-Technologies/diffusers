@@ -374,14 +374,14 @@ class DreamBoothDataset(Dataset):
         example = {}
         instance_image = Image.open(self.instance_images_path[index % self.num_instance_images])
         instance_mask = Image.open(self.mask_images_path[index % self.num_instance_images])
-        print("Path Read for Image is ", self.instance_images_path[index % self.num_instance_images])
-        print("Path to Mask is",self.mask_images_path[index % self.num_instance_images])
-        print("Mask mode",instance_mask.mode)
+        # print("Path Read for Image is ", self.instance_images_path[index % self.num_instance_images])
+        # print("Path to Mask is",self.mask_images_path[index % self.num_instance_images])
+        # print("Mask mode",instance_mask.mode)
 
         if not instance_mask.mode == "L":
           instance_mask = instance_mask.convert('L')
         
-        print("Mask mode  after changing ", instance_mask.mode)
+        # print("Mask mode  after changing ", instance_mask.mode)
 
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
