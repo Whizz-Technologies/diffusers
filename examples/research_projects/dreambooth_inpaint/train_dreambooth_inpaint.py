@@ -103,6 +103,13 @@ def parse_args():
         help="A folder containing the training data of instance images.",
     )
     parser.add_argument(
+        "--mask_data_dir",
+        type=str,
+        default=None,
+        required=True,
+        help="A folder containing the mask data of instance images.",
+    )
+    parser.add_argument(
         "--class_data_dir",
         type=str,
         default=None,
@@ -304,6 +311,7 @@ class DreamBoothDataset(Dataset):
     def __init__(
         self,
         instance_data_root,
+        mask_data_root,
         instance_prompt,
         tokenizer,
         class_data_root=None,
@@ -320,6 +328,11 @@ class DreamBoothDataset(Dataset):
             raise ValueError("Instance images root doesn't exists.")
 
         self.instance_images_path = list(Path(instance_data_root).iterdir())
+        self.mask_data_root = Path(mask_data_root)
+        if not self.mask_data_root.exists():
+            raise ValueError("Instance images root doesn't exists.")
+
+        self.mask_images_path = list(Path(mask_data_root).iterdir())
         self.num_instance_images = len(self.instance_images_path)
         self.instance_prompt = instance_prompt
         self._length = self.num_instance_images
@@ -341,6 +354,12 @@ class DreamBoothDataset(Dataset):
             ]
         )
 
+        self.image_transforms_resize = transforms.Compose(
+            [
+                transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR)
+            ]
+        )
+
         self.image_transforms = transforms.Compose(
             [
                 transforms.ToTensor(),
@@ -354,12 +373,24 @@ class DreamBoothDataset(Dataset):
     def __getitem__(self, index):
         example = {}
         instance_image = Image.open(self.instance_images_path[index % self.num_instance_images])
+        instance_mask = Image.open(self.mask_images_path[index % self.num_instance_images])
+        print("Path Read for Image is ", self.instance_images_path[index % self.num_instance_images])
+        print("Path to Mask is",self.mask_images_path[index % self.num_instance_images])
+        print("Mask mode",instance_mask.mode)
+
+        if not instance_mask.mode == "L":
+          instance_mask = instance_mask.convert('L')
+        
+        print("Mask mode  after changing ", instance_mask.mode)
+
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
-        instance_image = self.image_transforms_resize_and_crop(instance_image)
+        instance_image = self.image_transforms_resize(instance_image)
+        instance_mask = self.image_transforms_resize(instance_mask)
 
         example["PIL_images"] = instance_image
         example["instance_images"] = self.image_transforms(instance_image)
+        example["PIL_mask"] = instance_mask
 
         example["instance_prompt_ids"] = self.tokenizer(
             self.instance_prompt,
@@ -422,9 +453,7 @@ def main():
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
         log_with="tensorboard",
-        logging_dir=logging_dir,
-        accelerator_project_config=accelerator_project_config,
-    )
+        logging_dir=logging_dir)
 
     # Currently, it's not possible to do gradient accumulation when training two models with accelerate.accumulate
     # This will be enabled soon in accelerate. For now, we don't allow gradient accumulation when training two models.
@@ -554,6 +583,7 @@ def main():
 
     train_dataset = DreamBoothDataset(
         instance_data_root=args.instance_data_dir,
+        mask_data_root = args.mask_data_dir,
         instance_prompt=args.instance_prompt,
         class_data_root=args.class_data_dir if args.with_prior_preservation else None,
         class_prompt=args.class_prompt,
@@ -578,7 +608,7 @@ def main():
         for example in examples:
             pil_image = example["PIL_images"]
             # generate a random mask
-            mask = random_mask(pil_image.size, 1, False)
+            mask = example["PIL_mask"]
             # prepare mask and masked image
             mask, masked_image = prepare_mask_and_masked_image(pil_image, mask)
 
