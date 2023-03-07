@@ -50,7 +50,7 @@ def prepare_mask_and_masked_image(image, mask):
     mask[mask >= 0.5] = 1
     mask = torch.from_numpy(mask)
 
-    masked_image = image * (mask < 0.5)
+    masked_image = image * (mask > 0.5)
 
     return mask, masked_image
 
